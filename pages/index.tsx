@@ -1,6 +1,7 @@
 import React from "react";
 import { useEffect } from "react";
 import Head from "next/head";
+import Script from "next/script";
 
 const navItems = [
   { id: "hero", label: "Home" },
@@ -31,6 +32,7 @@ export default function Home() {
           name="description"
           content="Secure your family's future with residency-by-investment in Azerbaijan. Fully managed legal, migration and property services for Gulf investors."
         />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </Head>
       {/* Sticky Navigation */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-gray-200">
@@ -241,6 +243,126 @@ export default function Home() {
           <path d="M12 .5C5.73.5.5 5.73.5 12c0 2.11.55 4.02 1.52 5.71L.5 23.5l5.91-1.47A11.45 11.45 0 0 0 12 23.5C18.27 23.5 23.5 18.27 23.5 12S18.27.5 12 .5Zm0 20.4c-1.94 0-3.73-.58-5.23-1.57l-.37-.24-3.5.87.93-3.41-.24-.39A9.42 9.42 0 0 1 2.6 12C2.6 6.97 6.97 2.6 12 2.6S21.4 6.97 21.4 12 17.03 20.9 12 20.9Zm5.47-6.86c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.59-.48-.5-.67-.5h-.57c-.2 0-.52.07-.79.37s-1.04 1.02-1.04 2.48 1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.08 4.48 3.54 1.44 3.54.96 4.17.9.64-.06 2.04-.82 2.33-1.61.29-.79.29-1.47.2-1.61-.1-.15-.29-.22-.59-.37Z" />
         </svg>
       </a>
+
+      {/* VAPI Assistant Button */}
+      <button id="vapi-button" className="vapi-button" aria-label="Start Voice Assistant">
+        <span className="vapi-btn-label">AI&nbsp;Assist</span>
+        <i className="fas fa-phone-slash vapi-icon" />
+      </button>
+
+      {/* Assistant Modal */}
+      <div id="assistantModal" className="modal-overlay">
+        <div className="modal-content">
+          <button id="assistantModalClose" className="modal-close-btn" aria-label="Close">×</button>
+          <div className="modal-header-title">Введите ваши данные для подтверждения</div>
+          <form id="assistantForm">
+            <input type="hidden" id="callIdInput" name="callId" />
+            <label htmlFor="phoneInput">Телефон:</label>
+            <input id="phoneInput" name="phone" type="tel" required placeholder="+7 (XXX) XXX-XX-XX" />
+            <label htmlFor="emailInput">Email:</label>
+            <input id="emailInput" name="email" type="email" required placeholder="you@example.com" />
+            <button type="submit">Отправить</button>
+          </form>
+        </div>
+      </div>
+
+      <Script id="vapi-logic" strategy="afterInteractive">
+        {`
+          (async () => {
+            const callBtn = document.getElementById('vapi-button');
+            const label   = callBtn?.querySelector('.vapi-btn-label');
+            const modal   = document.getElementById('assistantModal');
+            const closeBtn= document.getElementById('assistantModalClose');
+            const form    = document.getElementById('assistantForm');
+            const hidden  = document.getElementById('callIdInput');
+
+            if (!callBtn) return;
+
+            // Dynamic imports so Next.js doesn't bundle them
+            const { default: Vapi } = await import('https://esm.sh/@vapi-ai/web');
+            const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+
+            const vapi = new Vapi('58f89212-0e94-4123-8f9e-3bc0dde56fe0');
+
+            /* Supabase realtime to receive callId */
+            const sb = createClient(
+              'https://wirwojaiknnvtpzaxzjv.supabase.co',
+              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpcndvamFpa25udnRwemF4emp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5NjE3ODcsImV4cCI6MjA2NjUzNzc4N30.XyhklppW2bvJQ7qFv4SWaDaGK_M_YoGFAiOIFo2tW1c'
+            );
+
+            sb.channel('bagheera:new-call')
+              .on('broadcast', { event: 'call-created' }, ({ payload }) => {
+                console.log('🔔 new callId', payload.callId);
+                if (hidden) hidden.value = payload.callId;
+              })
+              .subscribe();
+
+            /* Button click handler */
+            callBtn.addEventListener('click', () => {
+              if (callBtn.classList.contains('loading')) return;
+
+              if (callBtn.classList.contains('active')) {
+                vapi.stop();
+                callBtn.classList.add('loading');
+                return;
+              }
+
+              callBtn.classList.add('loading');
+              vapi.start(undefined, undefined, '541e48cf-1f4a-423b-875f-889c6917a56d').catch(err => {
+                console.error(err);
+                callBtn.classList.remove('loading');
+              });
+            });
+
+            vapi.on('call-start', () => {
+              callBtn.classList.remove('loading');
+              callBtn.classList.add('active');
+              if (label) label.style.display = 'none';
+            });
+
+            const resetBtn = () => {
+              callBtn.classList.remove('loading', 'active');
+              if (label) {
+                label.textContent = 'AI Assist';
+                label.style.display = 'inline';
+              }
+            };
+            vapi.on('call-end', resetBtn);
+            vapi.on('error', resetBtn);
+
+            const TRIGGER_PHRASE = 'please type your phone number below to confirm.';
+            vapi.on('message', (msg) => {
+              if (
+                msg.type === 'transcript' &&
+                msg.role === 'assistant' &&
+                msg.transcriptType === 'final' &&
+                typeof msg.transcript === 'string' &&
+                msg.transcript.toLowerCase().includes(TRIGGER_PHRASE)
+              ) {
+                if (modal) modal.style.display = 'flex';
+              }
+            });
+
+            /* Modal logic */
+            if (closeBtn) closeBtn.addEventListener('click', () => { if (modal) modal.style.display = 'none'; });
+            window.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+
+            if (form) form.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const fd = new FormData(form);
+              try {
+                await fetch('https://backendemze.dayeler.com/webhook/toolCall', { method: 'POST', body: fd });
+                alert('Спасибо! Данные отправлены.');
+                modal.style.display = 'none';
+                form.reset();
+              } catch(err){
+                console.error(err);
+                alert('Ошибка отправки. Попробуйте ещё раз.');
+              }
+            });
+          })();
+        `}
+      </Script>
     </>
   );
 } 
